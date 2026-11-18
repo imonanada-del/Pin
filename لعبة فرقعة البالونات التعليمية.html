@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>لعبة فرقعة البالونات - سورة الإنسان</title>
+    <!-- استدعاء خط Cairo للوضوح العالي في اللغة العربية -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        /* المتغيرات اللونية والهوية البصرية المعتمدة */
+        :root {
+            --navy: #1F3864;
+            --navy-dark: #132442;
+            --gold: #C9A227;
+            --gold-light: #F3D36B;
+            --sky-light: #D6E4F0;
+            --sky-deep: #9BC2E6;
+            --white: #FFFFFF;
+            --success: #1E8449;
+            --error: #C0392B;
+            --header-height-init: 76px;
+            --header-height-compact: 54px;
+        }
+
+        /* إعادة ضبط أساسية ومنع التمرير والتحديد */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            font-family: 'Cairo', Tahoma, Arial, sans-serif;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: linear-gradient(180deg, #87CEEB 0%, var(--sky-light) 65%, #EFF6FC 100%);
+            color: var(--navy);
+        }
+
+        /* ================= الترويسة الثابتة والمنطقة الآمنة ================= */
+        #app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: var(--header-height-init);
+            background: linear-gradient(90deg, var(--navy-dark) 0%, var(--navy) 50%, var(--navy-dark) 100%);
+            color: var(--white);
+            border-bottom: 3px solid var(--gold);
+            box-shadow: 0 4px 15px rgba(31, 56, 100, 0.25);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            transition: height 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.4s ease;
+        }
+
+        /* تحول الترويسة لشريط علوي صغير بعد بدء اللعب */
+        #app-header.compact {
+            height: var(--header-height-compact);
+            padding: 0 16px;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-icon {
+            width: 34px;
+            height: 34px;
+            fill: var(--gold);
+            transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        #app-header.compact .header-icon {
+            width: 26px;
+            height: 26px;
+        }
+
+        .header-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            color: var(--white);
+            transition: font-size 0.3s ease;
+            white-space: nowrap;
+        }
+
+        #app-header.compact .header-title {
+            font-size: 1.05rem;
+        }
+
+        /* شارة اسم الطالب الظاهرة طوال اللعبة */
+        #student-badge {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1.5px solid var(--gold);
+            padding: 4px 14px;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--gold-light);
+            max-width: 55%;
+        }
+
+        #student-badge.visible {
+            display: flex;
+        }
+
+        #student-badge span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--white);
+        }
+
+        /* المنطقة الآمنة أسفل الترويسة لمنع أي تداخل */
+        #safe-workspace {
+            position: fixed;
+            top: var(--header-height-init);
+            left: 0;
+            width: 100%;
+            height: calc(100% - var(--header-height-init));
+            transition: top 0.4s ease, height 0.4s ease;
+            overflow: hidden;
+        }
+
+        body.playing #safe-workspace {
+            top: var(--header-height-compact);
+            height: calc(100% - var(--header-height-compact));
+        }
+
+        /* ================= سماء متحركة وسحب ================= */
+        .sky-clouds {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .cloud {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.78);
+            border-radius: 100px;
+            box-shadow: 0 8px 20px rgba(31, 56, 100, 0.06);
+            animation: drift linear infinite;
+        }
+
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background: inherit;
+            border-radius: 50%;
+        }
+
+        .cloud-1 { width: 140px; height: 46px; top: 10%; left: -160px; animation-duration: 42s; }
+        .cloud-1::before { width: 65px; height: 65px; top: -32px; left: 22px; }
+        .cloud-1::after { width: 50px; height: 50px; top: -20px; right: 22px; }
+
+        .cloud-2 { width: 180px; height: 54px; top: 28%; left: -200px; animation-duration: 58s; animation-delay: -15s; opacity: 0.65; }
+        .cloud-2::before { width: 80px; height: 80px; top: -40px; left: 30px; }
+        .cloud-2::after { width: 60px; height: 60px; top: -25px; right: 28px; }
+
+        .cloud-3 { width: 120px; height: 40px; top: 52%; left: -150px; animation-duration: 48s; animation-delay: -28s; opacity: 0.7; }
+        .cloud-3::before { width: 55px; height: 55px; top: -26px; left: 18px; }
+        .cloud-3::after { width: 42px; height: 42px; top: -16px; right: 18px; }
+
+        @keyframes drift {
+            from { transform: translateX(-220px); }
+            to { transform: translateX(calc(100vw + 240px)); }
+        }
+
+        /* ================= الشاشة الافتتاحية ================= */
+        #start-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.35) 0%, rgba(214,228,240,0.6) 100%);
+            backdrop-filter: blur(4px);
+            transition: opacity 0.45s ease, visibility 0.45s ease;
+        }
+
+        #start-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .welcome-card {
+            background: var(--white);
+            border: 3px solid var(--gold);
+            border-radius: 24px;
+            padding: 32px 28px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 20px 45px rgba(31, 56, 100, 0.18);
+            animation: floatCard 3.5s ease-in-out infinite;
+        }
+
+        @keyframes floatCard {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .badge-emblem {
+            width: 74px;
+            height: 74px;
+            margin: 0 auto 14px;
+            background: linear-gradient(135deg, var(--navy) 0%, #2C4D87 100%);
+            border: 3px solid var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(31, 56, 100, 0.25);
+        }
+
+        .badge-emblem svg {
+            width: 38px;
+            height: 38px;
+            fill: var(--gold-light);
+        }
+
+        .welcome-title {
+            font-size: 1.9rem;
+            font-weight: 900;
+            color: var(--navy);
+            margin-bottom: 8px;
+        }
+
+        .welcome-subtitle {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #3E5882;
+            line-height: 1.6;
+            margin-bottom: 22px;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+            text-align: right;
+        }
+
+        .student-input {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--navy);
+            background: #F4F8FC;
+            border: 2.5px solid #B8CCE4;
+            border-radius: 14px;
+            outline: none;
+            text-align: center;
+            transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+        }
+
+        .student-input:focus {
+            background: var(--white);
+            border-color: var(--gold);
+            box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.22);
+        }
+
+        .input-hint {
+            font-size: 0.88rem;
+            color: var(--error);
+            font-weight: 700;
+            margin-top: 6px;
+            text-align: center;
+            min-height: 20px;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+
+        .input-hint.show {
+            opacity: 1;
+        }
+
+        .primary-btn {
+            width: 100%;
+            padding: 15px 24px;
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--white);
+            background: linear-gradient(135deg, var(--navy) 0%, #2B4C85 100%);
+            border: 2.5px solid var(--gold);
+            border-radius: 14px;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(31, 56, 100, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(31, 56, 100, 0.35);
+            background: linear-gradient(135deg, #27467B 0%, var(--navy) 100%);
+        }
+
+        .primary-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* ================= ساحة اللعب (Canvas) ================= */
+        #game-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            display: block;
+            touch-action: none;
+        }
+
+        /* تأثير اهتزاز خفيف عند الفرقعة */
+        @keyframes screenShake {
+            0%, 100% { transform: translate(0, 0); }
+            20% { transform: translate(-5px, 4px); }
+            40% { transform: translate(5px, -4px); }
+            60% { transform: translate(-4px, -3px); }
+            80% { transform: translate(4px, 3px); }
+        }
+
+        .shake-effect {
+            animation: screenShake 0.32s ease-in-out;
+        }
+
+        /* وميض ضوئي عند الفرقعة */
+        #flash-overlay {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(255, 250, 220, 0.75) 0%, rgba(255, 255, 255, 0) 70%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 12;
+            transition: opacity 0.25s ease-out;
+        }
+
+        /* تلميح توجيهي سفلي خفيف */
+        #pin-guide {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(31, 56, 100, 0.85);
+            color: var(--white);
+            border: 1.5px solid var(--gold);
+            padding: 6px 18px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            z-index: 8;
+            pointer-events: none;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: opacity 0.4s ease;
+        }
+
+        /* ================= نافذة السؤال المنبثقة ================= */
+        #question-modal {
+            position: absolute;
+            inset: 0;
+            z-index: 30;
+            background: rgba(19, 36, 66, 0.72);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        #question-modal.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .question-card {
+            background: var(--white);
+            border: 3px solid var(--gold);
+            border-radius: 22px;
+            width: 100%;
+            max-width: 640px;
+            max-height: 92%;
+            overflow-y: auto;
+            padding: 24px 22px;
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+            transform: scale(0.92);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #question-modal.active .question-card {
+            transform: scale(1);
+        }
+
+        .q-category-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--sky-light);
+            color: var(--navy);
+            border: 1.5px solid #B5CCE4;
+            padding: 5px 14px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            margin-bottom: 14px;
+        }
+
+        .q-category-tag svg {
+            width: 18px;
+            height: 18px;
+            fill: var(--navy);
+        }
+
+        .q-text {
+            font-size: 1.28rem;
+            font-weight: 800;
+            color: var(--navy);
+            line-height: 1.65;
+            margin-bottom: 20px;
+            white-space: pre-line;
+        }
+
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .options-container.tf-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .option-btn {
+            width: 100%;
+            padding: 15px 18px;
+            font-size: 1.12rem;
+            font-weight: 700;
+            color: var(--navy);
+            background: #F4F8FC;
+            border: 2.5px solid #C2D6EC;
+            border-radius: 14px;
+            cursor: pointer;
+            text-align: right;
+            line-height: 1.5;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .options-container.tf-grid .option-btn {
+            justify-content: center;
+            text-align: center;
+            font-size: 1.25rem;
+            padding: 18px 14px;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background: var(--sky-light);
+            border-color: var(--navy);
+            transform: translateY(-2px);
+        }
+
+        .option-btn.wrong-shake {
+            background: #FDEDEC;
+            border-color: var(--error);
+            color: var(--error);
+            animation: btnShake 0.4s ease;
+        }
+
+        .option-btn.correct-highlight {
+            background: #EAFAF1;
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        @keyframes btnShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            50% { transform: translateX(8px); }
+            75% { transform: translateX(-5px); }
+        }
+
+        /* إشعار التغذية الراجعة داخل النافذة */
+        #feedback-banner {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 1.15rem;
+            font-weight: 800;
+            text-align: center;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        #feedback-banner.success {
+            display: flex;
+            background: #D4EFDF;
+            color: #145A32;
+            border: 2px solid var(--success);
+        }
+
+        #feedback-banner.error {
+            display: flex;
+            background: #FADBD8;
+            color: #78281F;
+            border: 2px solid var(--error);
+        }
+
+        /* ================= شاشة النهاية والشهادة ================= */
+        #end-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 40;
+            background: rgba(19, 36, 66, 0.82);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.45s ease, visibility 0.45s ease;
+            overflow-y: auto;
+        }
+
+        #end-screen.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .end-card {
+            background: var(--white);
+            border: 4px solid var(--gold);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 580px;
+            padding: 28px 24px;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+            position: relative;
+        }
+
+        .end-emblem {
+            width: 78px;
+            height: 78px;
+            margin: 0 auto 12px;
+            background: linear-gradient(135deg, var(--gold) 0%, #E5BE46 100%);
+            border: 3px solid var(--navy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(201, 162, 39, 0.4);
+        }
+
+        .end-emblem svg {
+            width: 40px;
+            height: 40px;
+            fill: var(--navy);
+        }
+
+        .end-title {
+            font-size: 1.85rem;
+            font-weight: 900;
+            color: var(--navy);
+            margin-bottom: 6px;
+        }
+
+        .end-student-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--gold);
+            background: var(--navy);
+            display: inline-block;
+            padding: 6px 22px;
+            border-radius: 50px;
+            margin-bottom: 18px;
+            border: 2px solid var(--gold);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .stat-box {
+            background: var(--sky-light);
+            border: 2px solid #B5CCE4;
+            border-radius: 16px;
+            padding: 14px 10px;
+        }
+
+        .stat-label {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #3E5882;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.35rem;
+            font-weight: 900;
+            color: var(--navy);
+        }
+
+        .end-actions {
+            display: flex;
+            justify-content: center;
+        }
+
+        .action-btn {
+            width: 100%;
+            max-width: 280px;
+            padding: 14px 24px;
+            font-size: 1.08rem;
+            font-weight: 800;
+            border-radius: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-restart {
+            background: var(--navy);
+            color: var(--white);
+            border: 2px solid var(--gold);
+            box-shadow: 0 6px 16px rgba(31, 56, 100, 0.28);
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .action-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        /* التجاوب مع الشاشات الصغيرة والهواتف */
+        @media (max-width: 600px) {
+            :root {
+                --header-height-init: 64px;
+                --header-height-compact: 48px;
+            }
+            .header-title { font-size: 1.1rem; }
+            #app-header.compact .header-title { font-size: 0.95rem; }
+            #student-badge { font-size: 0.82rem; padding: 3px 10px; }
+            .welcome-card { padding: 24px 18px; }
+            .welcome-title { font-size: 1.55rem; }
+            .q-text { font-size: 1.12rem; }
+            .option-btn { font-size: 1rem; padding: 13px 14px; }
+            .options-container.tf-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- الترويسة الثابتة أعلى الشاشة -->
+    <header id="app-header">
+        <div class="header-brand">
+            <!-- أيقونة كتاب تعليمية بديلة -->
+            <svg class="header-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
+            </svg>
+            <h1 class="header-title">فرقعة البالونات</h1>
+        </div>
+
+        <!-- اسم الطالب يبقى ظاهرًا طوال اللعبة -->
+        <div id="student-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+            <span id="display-student-name"></span>
+        </div>
+    </header>
+
+    <!-- مساحة العمل الآمنة أسفل الترويسة -->
+    <main id="safe-workspace">
+        <!-- خلفية السحب المتحركة -->
+        <div class="sky-clouds" aria-hidden="true">
+            <div class="cloud cloud-1"></div>
+            <div class="cloud cloud-2"></div>
+            <div class="cloud cloud-3"></div>
+        </div>
+
+        <!-- وميض ضوئي عند الفرقعة -->
+        <div id="flash-overlay"></div>
+
+        <!-- ساحة البالونات والدبوس الذهبي -->
+        <canvas id="game-canvas"></canvas>
+
+        <!-- شريط توجيهي سفلي -->
+        <div id="pin-guide">اسحب الدبوس الذهبي لملامسة البالونات الملونة</div>
+
+        <!-- الشاشة الافتتاحية -->
+        <section id="start-screen">
+            <div class="welcome-card">
+                <div class="badge-emblem">
+                    <!-- أيقونة كتاب -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/>
+                    </svg>
+                </div>
+                <h2 class="welcome-title">فرقعة البالونات</h2>
+                <p class="welcome-subtitle">مرحبًا بك في التحدي التعليمي التفاعلي حول دروس سورة الإنسان. أدخل اسمك للبدء وحرّك الدبوس الذهبي نحو البالونات!</p>
+                
+                <div class="input-group">
+                    <input type="text" id="student-name-input" class="student-input" placeholder="اكتب اسمك هنا..." maxlength="35" autocomplete="off">
+                    <div id="name-error-msg" class="input-hint">يرجى إدخال اسم الطالب أولاً للبدء</div>
+                </div>
+
+                <button id="start-game-btn" class="primary-btn">ابدأ اللعبة</button>
+            </div>
+        </section>
+
+        <!-- نافذة السؤال المرتبط بالبالون -->
+        <section id="question-modal" role="dialog" aria-modal="true">
+            <div class="question-card">
+                <div class="q-category-tag">
+                    <!-- أيقونة قلم -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                    </svg>
+                    <span id="q-type-label">سؤال تفاعلي</span>
+                </div>
+
+                <div id="q-text-display" class="q-text"></div>
+                <div id="q-options-list" class="options-container"></div>
+                <div id="feedback-banner"></div>
+            </div>
+        </section>
+
+        <!-- شاشة النهاية والإنجاز -->
+        <section id="end-screen">
+            <div class="end-card">
+                <div class="end-emblem">
+                    <!-- أيقونة كتاب مفتوح للإنجاز -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/>
+                    </svg>
+                </div>
+                <h2 class="end-title">أتممت جميع البالونات بنجاح!</h2>
+                <div id="final-student-name" class="end-student-name"></div>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">عدد الإنجازات المحققة</div>
+                        <div id="final-achievements" class="stat-value">20 / 20 بالونًا</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">زمن اللعب الكلي</div>
+                        <div id="final-time" class="stat-value">00:00</div>
+                    </div>
+                </div>
+
+                <div class="end-actions">
+                    <button id="restart-game-btn" class="action-btn btn-restart">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                        <span>إعادة اللعب</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        /**
+         * بنك الأسئلة الكامل (20 سؤالاً = 20 بالونًا)
+         * 9 أسئلة صواب أو خطأ + 11 سؤال اختيار من متعدد
+         */
+        const QUESTIONS_BANK = [
+            // --- أسئلة ضع علامة صح أو خطأ ---
+            {
+                type: 'tf',
+                question: 'الله الشكور الذي يجازي على الشيء القليل الكثير والكثير',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'أصبر على الطاعة حتى أفعلها',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'القرآن نزل على الرسول ﷺ جملة واحدة',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 1
+            },
+            {
+                type: 'tf',
+                question: 'أذكر الله أول النهار وآخره',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'أصلي بالليل تقربًا إلى الله',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'المشركون يحبون الآخرة أكثر من الدنيا',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 1
+            },
+            {
+                type: 'tf',
+                question: 'هذه السورة للموعظة والتذكير',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'الله يُدخل من يشاء في رحمته',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+            {
+                type: 'tf',
+                question: 'الكافرين أعدَّ الله لهم عذاب النار',
+                options: ['صواب ✅', 'خطأ ❎'],
+                correctIndex: 0
+            },
+
+            // --- أسئلة اختر من متعدد ---
+            {
+                type: 'mcq',
+                question: 'ما الذي أنزله الله على رسوله ﷺ لهدايتنا إلى الطريق الصحيح؟',
+                options: ['القصص.', 'القرآن الكريم.'],
+                correctIndex: 1
+            },
+            {
+                type: 'mcq',
+                question: 'قال تعالى: ﴿وَاصْبِرْ لِحُكْمِ رَبِّكَ وَلَا تُطِعْ مِنْهُمْ آثِمًا أَوْ كَفُورًا﴾\nبماذا أمرنا الله أن نفعل عند مواجهة الصعوبات أو التعرض لأذى الكفار والعصاة الذين يصدوننا عن طاعة الله؟',
+                options: ['الصبر.', 'عدم طاعة الذين يصدوننا عن طاعة الله.', 'جميع ما سبق.'],
+                correctIndex: 2
+            },
+            {
+                type: 'mcq',
+                question: 'قال تعالى: ﴿فَاصْبِرْ لِحُكْمِ رَبِّكَ﴾\nأمرنا الله عز وجل في الآية بالصبر، فعلى ماذا نصبر؟',
+                options: [
+                    'على طاعة الله وتنفيذ أوامره.',
+                    'عن المعاصي، فنبتعد عن كل ما يغضب الله.',
+                    'على الابتلاءات، فلا نتسخط على أقدار الله.',
+                    'جميع ما سبق.'
+                ],
+                correctIndex: 3
+            },
+            {
+                type: 'mcq',
+                question: 'متى يأمرنا الله تعالى بذكر اسمه وتسبيحه؟',
+                options: [
+                    'في الصباح فقط.',
+                    'في المساء فقط.',
+                    'في الصباح والمساء وأثناء الليل الطويل.'
+                ],
+                correctIndex: 2
+            },
+            {
+                type: 'mcq',
+                question: 'قال تعالى: ﴿إِنَّ هَؤُلَاءِ يُحِبُّونَ الْعَاجِلَةَ وَيَذَرُونَ وَرَاءَهُمْ يَوْمًا ثَقِيلًا﴾\nماذا يحب هؤلاء الناس؟',
+                options: [
+                    'يحبون الآخرة وينسون الدنيا.',
+                    'يحبون الحياة الدنيا العاجلة، ويتركون العمل ليوم القيامة.'
+                ],
+                correctIndex: 1
+            },
+            {
+                type: 'mcq',
+                question: 'يهمل الكفار العمل للآخرة...',
+                options: [
+                    'لأنهم لا يعرفونها.',
+                    'لأنهم يحبون الدنيا العاجلة وينسون يوم الحساب الثقيل.'
+                ],
+                correctIndex: 1
+            },
+            {
+                type: 'mcq',
+                question: 'قال تعالى: ﴿إِنَّ هَذِهِ تَذْكِرَةٌ فَمَنْ شَاءَ اتَّخَذَ إِلَىٰ رَبِّهِ سَبِيلًا﴾\nالتذكرة هي الموعظة، فمن المنتفع بهذه الموعظة؟',
+                options: [
+                    'المؤمن الذي يتعظ ويعمل بما جاء في القرآن.',
+                    'كل الناس.'
+                ],
+                correctIndex: 0
+            },
+            {
+                type: 'mcq',
+                question: 'ما معنى قوله تعالى: ﴿وَمَا تَشَاءُونَ إِلَّا أَنْ يَشَاءَ اللَّهُ إِنَّ اللَّهَ كَانَ عَلِيمًا حَكِيمًا﴾؟',
+                options: [
+                    'أن إرادتنا وعملنا للخير لا يكونان إلا بمشيئة الله، فهو العليم بأحوالنا والحكيم في تدبيره.',
+                    'أن الله لا يعلم ما نفعل.'
+                ],
+                correctIndex: 0
+            },
+            {
+                type: 'mcq',
+                question: 'قال تعالى: ﴿يُدْخِلُ مَنْ يَشَاءُ فِي رَحْمَتِهِ وَالظَّالِمِينَ أَعَدَّ لَهُمْ عَذَابًا أَلِيمًا﴾\nماذا أعد الله لمن رضي عنهم وأدخلهم في رحمته، كما جاء في الآية؟',
+                options: [
+                    'يتركهم في الدنيا فقط.',
+                    'يدخلهم في رحمته (الجنة)، ويعدّ للظالمين عذابًا أليمًا.',
+                    'يعاقب الجميع.'
+                ],
+                correctIndex: 1
+            },
+            {
+                type: 'mcq',
+                question: 'النجاح والفلاح يعتمدان اعتمادًا كليًّا على مشيئة الله وتوفيقه، مع الأخذ بالأسباب وبذل الجهد والإرادة والتصميم.',
+                options: ['صح.', 'خطأ.'],
+                correctIndex: 0
+            },
+            {
+                type: 'mcq',
+                question: 'ما الدروس المستفادة من سورة الإنسان؟',
+                options: [
+                    'التواضع وعدم الكبر.',
+                    'الوفاء بالعهد.',
+                    'الصبر والتقرب إلى الله بالذكر.',
+                    'طاعة الله وسلوك الطريق الموصل إلى جنته.',
+                    'جميع ما سبق.'
+                ],
+                correctIndex: 4
+            }
+        ];
+
+        // 20 لونًا متميزًا ومبهجًا للبالونات (لون فريد لكل بالون)
+        const BALLOON_PALETTE = [
+            { base: '#E74C3C', light: '#FF8A7A', dark: '#922B21' }, // أحمر ياقوتي
+            { base: '#2980B9', light: '#7FB3D5', dark: '#1A5276' }, // أزرق ملكي
+            { base: '#27AE60', light: '#82E0AA', dark: '#186A3B' }, // أخضر زمردي
+            { base: '#F39C12', light: '#F8C471', dark: '#9C640C' }, // برتقالي ذهبي
+            { base: '#8E44AD', light: '#D2B4DE', dark: '#512E5F' }, // بنفسجي ملكي
+            { base: '#16A085', light: '#76D7C4', dark: '#0E6251' }, // فيروزي
+            { base: '#D35400', light: '#F0B27A', dark: '#7E5109' }, // يوسفي دافئ
+            { base: '#C0392B', light: '#F1948A', dark: '#78281F' }, // قرمزي
+            { base: '#2E86C1', light: '#85C1E9', dark: '#1B4F72' }, // سماوي عميق
+            { base: '#E84393', light: '#FD79A8', dark: '#880E4F' }, // وردي زاهي
+            { base: '#0097A7', light: '#80DEEA', dark: '#006064' }, // سيان بحري
+            { base: '#689F38', light: '#AED581', dark: '#33691E' }, // عشبي مشرق
+            { base: '#5E35B1', light: '#B39DDB', dark: '#311B92' }, // نيلي بنفسجي
+            { base: '#F57C00', light: '#FFB74D', dark: '#E65100' }, // عنبري
+            { base: '#00897B', light: '#80CBC4', dark: '#004D40' }, // أخضر مائي
+            { base: '#D81B60', light: '#F48FB1', dark: '#880E4F' }, // توتي
+            { base: '#3949AB', light: '#9FA8DA', dark: '#1A237E' }, // كحلي مشرق
+            { base: '#7CB342', light: '#C5E1A5', dark: '#33691E' }, // تفاحي
+            { base: '#FB8C00', light: '#FFCC80', dark: '#EF6C00' }, // مشمشي
+            { base: '#546E7A', light: '#B0BEC5', dark: '#263238' }  // أزرق رمادي أنيق
+        ];
+
+        /* ================= محرك المؤثرات الصوتية المدمج (Web Audio API) ================= */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        this.ctx = new AudioCtx();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            // صوت فرقعة البالون الواقعي
+            playPop() {
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                // موجة ضغط سريعة (Pitch drop)
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(55, now + 0.14);
+
+                gain.gain.setValueAtTime(0.85, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.15);
+
+                // نبضة ضوضاء بيضاء لمحاكاة انفجار الهواء
+                const bufferSize = this.ctx.sampleRate * 0.09;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.65, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+
+                noise.connect(noiseGain);
+                noiseGain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+
+            // نغمة الإجابة الصحيحة
+            playCorrect() {
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+                    gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+                    gain.gain.linearRampToValueAtTime(0.32, now + idx * 0.08 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.35);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.08);
+                    osc.stop(now + idx * 0.08 + 0.38);
+                });
+            }
+
+            // نغمة الإجابة الخاطئة
+            playWrong() {
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const freqs = [240, 185];
+
+                freqs.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.16);
+
+                    gain.gain.setValueAtTime(0.22, now + idx * 0.16);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.16 + 0.22);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.16);
+                    osc.stop(now + idx * 0.16 + 0.24);
+                });
+            }
+
+            // لحن إتمام اللعبة بالكامل
+            playVictory() {
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const melody = [
+                    { f: 523.25, t: 0, d: 0.18 },
+                    { f: 659.25, t: 0.16, d: 0.18 },
+                    { f: 783.99, t: 0.32, d: 0.18 },
+                    { f: 1046.50, t: 0.48, d: 0.45 },
+                    { f: 783.99, t: 0.72, d: 0.18 },
+                    { f: 1046.50, t: 0.90, d: 0.65 }
+                ];
+
+                melody.forEach(item => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(item.f, now + item.t);
+
+                    gain.gain.setValueAtTime(0.01, now + item.t);
+                    gain.gain.linearRampToValueAtTime(0.35, now + item.t + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + item.t + item.d);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + item.t);
+                    osc.stop(now + item.t + item.d + 0.05);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /* ================= حالة اللعبة وإدارة العناصر ================= */
+        const state = {
+            studentName: '',
+            isPlaying: false,
+            isModalOpen: false,
+            startTime: 0,
+            endTime: 0,
+            balloons: [],
+            activeBalloon: null,
+            particles: [],
+            pin: {
+                x: 0,
+                y: 0,
+                homeX: 0,
+                homeY: 0,
+                isDragging: false,
+                trail: []
+            }
+        };
+
+        // مراجع عناصر الواجهة
+        const headerEl = document.getElementById('app-header');
+        const studentBadge = document.getElementById('student-badge');
+        const displayStudentName = document.getElementById('display-student-name');
+        const startScreen = document.getElementById('start-screen');
+        const nameInput = document.getElementById('student-name-input');
+        const nameErrorMsg = document.getElementById('name-error-msg');
+        const startBtn = document.getElementById('start-game-btn');
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const flashOverlay = document.getElementById('flash-overlay');
+        const pinGuide = document.getElementById('pin-guide');
+
+        const questionModal = document.getElementById('question-modal');
+        const qTypeLabel = document.getElementById('q-type-label');
+        const qTextDisplay = document.getElementById('q-text-display');
+        const qOptionsList = document.getElementById('q-options-list');
+        const feedbackBanner = document.getElementById('feedback-banner');
+
+        const endScreen = document.getElementById('end-screen');
+        const finalStudentName = document.getElementById('final-student-name');
+        const finalAchievements = document.getElementById('final-achievements');
+        const finalTime = document.getElementById('final-time');
+        const restartGameBtn = document.getElementById('restart-game-btn');
+
+        /* ================= ضبط أبعاد لوحة الرسم بتجاوب كامل ================= */
+        function resizeCanvas() {
+            const workspace = document.getElementById('safe-workspace');
+            const rect = workspace.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            // تحديث موضع الدبوس الافتراضي أسفل منتصف الشاشة
+            state.pin.homeX = rect.width / 2;
+            state.pin.homeY = rect.height - 62;
+
+            if (!state.pin.isDragging) {
+                state.pin.x = state.pin.homeX;
+                state.pin.y = state.pin.homeY;
+            }
+
+            // ضمان بقاء البالونات داخل الحدود الجديدة
+            state.balloons.forEach(b => {
+                if (!b.popped) {
+                    b.x = Math.max(b.rx + 12, Math.min(rect.width - b.rx - 12, b.x));
+                    b.y = Math.max(b.ry + 16, Math.min(rect.height - 135, b.y));
+                }
+            });
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        /* ================= تهيئة البالونات العشرين بدون أي أرقام ================= */
+        function initBalloons() {
+            const workspace = document.getElementById('safe-workspace');
+            const width = workspace.clientWidth;
+            const height = workspace.clientHeight;
+
+            // خلط الأسئلة والألوان عشوائيًا مع الحفاظ على ربط سؤال واحد بكل بالون
+            const shuffledQuestions = [...QUESTIONS_BANK].sort(() => Math.random() - 0.5);
+            const shuffledColors = [...BALLOON_PALETTE].sort(() => Math.random() - 0.5);
+
+            // حساب حجم البالون المتناسب مع حجم الشاشة
+            const isMobile = width < 600;
+            const baseRadiusX = isMobile ? Math.max(22, Math.min(28, width / 14)) : Math.max(30, Math.min(38, width / 26));
+            const baseRadiusY = baseRadiusX * 1.22;
+
+            state.balloons = shuffledQuestions.map((qItem, idx) => {
+                const marginX = baseRadiusX + 16;
+                const marginTop = baseRadiusY + 20;
+                const maxAreaY = Math.max(marginTop + 60, height - 150);
+
+                return {
+                    id: idx,
+                    questionData: qItem,
+                    color: shuffledColors[idx % shuffledColors.length],
+                    x: marginX + Math.random() * Math.max(20, width - marginX * 2),
+                    y: marginTop + Math.random() * Math.max(20, maxAreaY - marginTop),
+                    rx: baseRadiusX,
+                    ry: baseRadiusY,
+                    vx: (Math.random() - 0.5) * (isMobile ? 1.1 : 1.4),
+                    vy: (Math.random() - 0.5) * (isMobile ? 0.9 : 1.1),
+                    swayPhase: Math.random() * Math.PI * 2,
+                    swaySpeed: 0.02 + Math.random() * 0.015,
+                    popped: false
+                };
+            });
+        }
+
+        /* ================= بدء اللعبة ================= */
+        function startGame() {
+            const rawName = nameInput.value.trim();
+            if (!rawName) {
+                nameErrorMsg.classList.add('show');
+                nameInput.focus();
+                return;
+            }
+
+            nameErrorMsg.classList.remove('show');
+            sound.init();
+
+            state.studentName = rawName;
+            displayStudentName.textContent = rawName;
+            studentBadge.classList.add('visible');
+
+            // تصغير الترويسة وتفعيل وضع اللعب
+            headerEl.classList.add('compact');
+            document.body.classList.add('playing');
+            startScreen.classList.add('hidden');
+            endScreen.classList.remove('active');
+
+            setTimeout(() => {
+                resizeCanvas();
+                initBalloons();
+                state.particles = [];
+                state.isPlaying = true;
+                state.isModalOpen = false;
+                state.activeBalloon = null;
+                state.startTime = Date.now();
+                state.pin.x = state.pin.homeX;
+                state.pin.y = state.pin.homeY;
+                state.pin.trail = [];
+            }, 60);
+        }
+
+        startBtn.addEventListener('click', startGame);
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startGame();
+        });
+        nameInput.addEventListener('input', () => {
+            if (nameInput.value.trim()) nameErrorMsg.classList.remove('show');
+        });
+
+        /* ================= التحكم في سحب الدبوس الذهبي (فأرة ولمس) ================= */
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function handlePointerDown(e) {
+            if (!state.isPlaying || state.isModalOpen) return;
+            const pos = getPointerPos(e);
+
+            // السماح بالتقاط الدبوس من منطقة مريحة حوله أو من الجزء السفلي
+            const dist = Math.hypot(pos.x - state.pin.x, pos.y - state.pin.y);
+            if (dist <= 75 || pos.y >= canvas.getBoundingClientRect().height - 125) {
+                state.pin.isDragging = true;
+                state.pin.x = pos.x;
+                state.pin.y = pos.y;
+                pinGuide.style.opacity = '0';
+                if (e.cancelable) e.preventDefault();
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!state.isPlaying || state.isModalOpen || !state.pin.isDragging) return;
+            if (e.cancelable) e.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const pos = getPointerPos(e);
+
+            // إبقاء الدبوس داخل حدود الشاشة
+            state.pin.x = Math.max(18, Math.min(rect.width - 18, pos.x));
+            state.pin.y = Math.max(35, Math.min(rect.height - 20, pos.y));
+
+            // تسجيل الأثر البصري الذهبي خلف الدبوس
+            state.pin.trail.push({
+                x: state.pin.x,
+                y: state.pin.y - 34, // رأس الدبوس المدبب
+                alpha: 1,
+                size: 6
+            });
+            if (state.pin.trail.length > 22) {
+                state.pin.trail.shift();
+            }
+
+            checkPinCollision();
+        }
+
+        function handlePointerUp() {
+            state.pin.isDragging = false;
+        }
+
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+        window.addEventListener('touchmove', handlePointerMove, { passive: false });
+        window.addEventListener('touchend', handlePointerUp);
+
+        /* ================= فحص ملامسة الدبوس الذهبي للبالونات ================= */
+        function checkPinCollision() {
+            if (state.isModalOpen) return;
+
+            // إحداثيات رأس الدبوس المدبب
+            const tipX = state.pin.x;
+            const tipY = state.pin.y - 38;
+
+            for (let i = 0; i < state.balloons.length; i++) {
+                const b = state.balloons[i];
+                if (b.popped) continue;
+
+                // معادلة القطع الناقص للبالون
+                const dx = (tipX - b.x) / (b.rx * 0.95);
+                const dy = (tipY - b.y) / (b.ry * 0.95);
+
+                if (dx * dx + dy * dy <= 1.0) {
+                    triggerBalloonPop(b);
+                    break;
+                }
+            }
+        }
+
+        /* ================= الانفجار البصري والسمعي وفتح السؤال ================= */
+        function triggerBalloonPop(balloon) {
+            state.pin.isDragging = false;
+            state.isModalOpen = true;
+            state.activeBalloon = balloon;
+
+            // 1. صوت الفرقعة
+            sound.playPop();
+
+            // 2. اهتزاز خفيف ووميض ضوئي
+            canvas.classList.remove('shake-effect');
+            void canvas.offsetWidth;
+            canvas.classList.add('shake-effect');
+
+            flashOverlay.style.opacity = '1';
+            setTimeout(() => {
+                flashOverlay.style.opacity = '0';
+            }, 180);
+
+            // 3. توليد نجوم وقصاصات متطايرة احترافية
+            createPopExplosion(balloon.x, balloon.y, balloon.color);
+
+            // 4. عرض نافذة السؤال المرتبط بهذا البالون بعد لحظة قصيرة لرؤية الانفجار
+            setTimeout(() => {
+                openQuestionModal(balloon);
+            }, 340);
+        }
+
+        function createPopExplosion(x, y, colorObj) {
+            const colors = [colorObj.base, colorObj.light, '#C9A227', '#F3D36B', '#FFFFFF'];
+
+            // قصاصات ملونة
+            for (let i = 0; i < 34; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2.5 + Math.random() * 7.5;
+                state.particles.push({
+                    type: 'confetti',
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1.5,
+                    size: 5 + Math.random() * 6,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    rotation: Math.random() * Math.PI * 2,
+                    vRot: (Math.random() - 0.5) * 0.25,
+                    alpha: 1,
+                    decay: 0.018 + Math.random() * 0.012
+                });
+            }
+
+            // نجوم ذهبية ولامعة
+            for (let i = 0; i < 16; i++) {
+                const angle = (Math.PI * 2 * i) / 16 + (Math.random() - 0.5) * 0.3;
+                const speed = 3 + Math.random() * 6;
+                state.particles.push({
+                    type: 'star',
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1,
+                    size: 6 + Math.random() * 6,
+                    color: i % 2 === 0 ? '#C9A227' : '#FFF3B0',
+                    rotation: Math.random() * Math.PI,
+                    vRot: (Math.random() - 0.5) * 0.15,
+                    alpha: 1,
+                    decay: 0.016 + Math.random() * 0.01
+                });
+            }
+        }
+
+        /* ================= إدارة نافذة السؤال والتحقق من الإجابة ================= */
+        function openQuestionModal(balloon) {
+            const q = balloon.questionData;
+            qTypeLabel.textContent = q.type === 'tf' ? 'ضع علامة صواب أو خطأ' : 'اختر الإجابة الصحيحة';
+            qTextDisplay.textContent = q.question;
+
+            feedbackBanner.className = '';
+            feedbackBanner.textContent = '';
+
+            qOptionsList.innerHTML = '';
+            qOptionsList.className = q.type === 'tf' ? 'options-container tf-grid' : 'options-container';
+
+            q.options.forEach((optText, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = optText;
+                btn.addEventListener('click', () => handleAnswerSelection(idx, btn, q.correctIndex));
+                qOptionsList.appendChild(btn);
+            });
+
+            questionModal.classList.add('active');
+        }
+
+        function handleAnswerSelection(selectedIdx, btnElement, correctIdx) {
+            if (selectedIdx === correctIdx) {
+                // إجابة صحيحة
+                sound.playCorrect();
+                btnElement.classList.add('correct-highlight');
+
+                // تعطيل الأزرار مؤقتًا أثناء إظهار إشعار "أحسنت"
+                const allBtns = qOptionsList.querySelectorAll('.option-btn');
+                allBtns.forEach(b => b.disabled = true);
+
+                feedbackBanner.className = 'success';
+                feedbackBanner.textContent = 'أحسنت! إجابة صحيحة';
+
+                // إخفاء البالون نهائيًا وتسجيل التقدم
+                if (state.activeBalloon) {
+                    state.activeBalloon.popped = true;
+                }
+
+                setTimeout(() => {
+                    questionModal.classList.remove('active');
+                    state.isModalOpen = false;
+                    state.activeBalloon = null;
+
+                    // إعادة الدبوس لموضعه الأساسي
+                    state.pin.x = state.pin.homeX;
+                    state.pin.y = state.pin.homeY;
+                    state.pin.trail = [];
+
+                    checkGameCompletion();
+                }, 950);
+
+            } else {
+                // إجابة خاطئة: يبقى السؤال معروضًا حتى الإجابة الصحيحة
+                sound.playWrong();
+                btnElement.classList.remove('wrong-shake');
+                void btnElement.offsetWidth;
+                btnElement.classList.add('wrong-shake');
+
+                feedbackBanner.className = 'error';
+                feedbackBanner.textContent = 'حاول مرة أخرى';
+            }
+        }
+
+        /* ================= فحص شرط إنهاء اللعبة ================= */
+        function checkGameCompletion() {
+            const remaining = state.balloons.filter(b => !b.popped).length;
+            if (remaining === 0) {
+                state.isPlaying = false;
+                state.endTime = Date.now();
+                sound.playVictory();
+                showEndScreen();
+            }
+        }
+
+        function formatDuration(ms) {
+            const totalSeconds = Math.max(1, Math.floor(ms / 1000));
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            const minsStr = mins < 10 ? '0' + mins : mins;
+            const secsStr = secs < 10 ? '0' + secs : secs;
+            return `${minsStr}:${secsStr} دقيقة`;
+        }
+
+        function showEndScreen() {
+            const elapsed = state.endTime - state.startTime;
+            finalStudentName.textContent = state.studentName;
+            finalAchievements.textContent = `${QUESTIONS_BANK.length} / ${QUESTIONS_BANK.length} بالونًا`;
+            finalTime.textContent = formatDuration(elapsed);
+
+            // إطلاق احتفالية قصاصات في السماء
+            const rect = canvas.getBoundingClientRect();
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createPopExplosion(
+                        rect.width * (0.2 + Math.random() * 0.6),
+                        rect.height * (0.2 + Math.random() * 0.4),
+                        BALLOON_PALETTE[i * 3]
+                    );
+                }, i * 250);
+            }
+
+            setTimeout(() => {
+                endScreen.classList.add('active');
+            }, 500);
+        }
+
+        /* ================= زر إعادة اللعب ================= */
+        restartGameBtn.addEventListener('click', () => {
+            endScreen.classList.remove('active');
+            pinGuide.style.opacity = '1';
+            resizeCanvas();
+            initBalloons();
+            state.particles = [];
+            state.isPlaying = true;
+            state.isModalOpen = false;
+            state.activeBalloon = null;
+            state.startTime = Date.now();
+            state.pin.x = state.pin.homeX;
+            state.pin.y = state.pin.homeY;
+            state.pin.trail = [];
+        });
+
+        /* ================= حلقة الرسم والتحديث ثلاثي الأبعاد (60 FPS) ================= */
+        function drawBalloon3D(b) {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+
+            // حركة تمايل خفيفة للخيط والبالون
+            const tilt = Math.sin(b.swayPhase) * 0.06;
+            ctx.rotate(tilt);
+
+            // 1. خيط البالون المتعرج أسفله
+            ctx.beginPath();
+            ctx.moveTo(0, b.ry + 4);
+            ctx.quadraticCurveTo(
+                Math.sin(b.swayPhase * 1.5) * 10,
+                b.ry + 24,
+                Math.cos(b.swayPhase) * 6,
+                b.ry + 44
+            );
+            ctx.strokeStyle = 'rgba(31, 56, 100, 0.55)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 2. عقدة البالون السفلية
+            ctx.beginPath();
+            ctx.moveTo(-5, b.ry + 5);
+            ctx.lineTo(5, b.ry + 5);
+            ctx.lineTo(0, b.ry - 2);
+            ctx.closePath();
+            ctx.fillStyle = b.color.dark;
+            ctx.fill();
+
+            // 3. جسم البالون ثلاثي الأبعاد بتدرج إضاءة كروي
+            const grad = ctx.createRadialGradient(
+                -b.rx * 0.32,
+                -b.ry * 0.35,
+                b.rx * 0.1,
+                0,
+                0,
+                b.ry * 1.15
+            );
+            grad.addColorStop(0, b.color.light);
+            grad.addColorStop(0.55, b.color.base);
+            grad.addColorStop(1, b.color.dark);
+
+            ctx.beginPath();
+            ctx.ellipse(0, 0, b.rx, b.ry, 0, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.shadowColor = 'rgba(31, 56, 100, 0.22)';
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetY = 6;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetY = 0;
+
+            // 4. انعكاس الضوء اللامع (Glossy Highlight) لإعطاء عمق 3D
+            ctx.save();
+            ctx.translate(-b.rx * 0.35, -b.ry * 0.32);
+            ctx.rotate(-0.45);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, b.rx * 0.18, b.ry * 0.32, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function drawGoldenPin() {
+            const { x, y, trail } = state.pin;
+
+            // 1. رسم الأثر البصري المتلألئ خلف الدبوس
+            for (let i = 0; i < trail.length; i++) {
+                const pt = trail[i];
+                const ratio = (i + 1) / trail.length;
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, pt.size * ratio, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(201, 162, 39, ${ratio * 0.55})`;
+                ctx.fill();
+            }
+
+            ctx.save();
+            ctx.translate(x, y);
+
+            // هالة ضوئية حول الدبوس لتسهيل رؤيته وسحبه
+            const aura = ctx.createRadialGradient(0, -10, 4, 0, -10, 46);
+            aura.addColorStop(0, 'rgba(243, 211, 107, 0.45)');
+            aura.addColorStop(1, 'rgba(201, 162, 39, 0)');
+            ctx.fillStyle = aura;
+            ctx.beginPath();
+            ctx.arc(0, -10, 46, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2. إبرة الدبوس المعدنية اللامعة
+            const needleGrad = ctx.createLinearGradient(-3, -38, 3, -5);
+            needleGrad.addColorStop(0, '#FFFFFF');
+            needleGrad.addColorStop(0.5, '#D0D7DE');
+            needleGrad.addColorStop(1, '#7F8C8D');
+
+            ctx.beginPath();
+            ctx.moveTo(0, -40); // الرأس المدبب
+            ctx.lineTo(-3.5, -6);
+            ctx.lineTo(3.5, -6);
+            ctx.closePath();
+            ctx.fillStyle = needleGrad;
+            ctx.fill();
+
+            // 3. طوق ذهبي فاصل
+            ctx.beginPath();
+            ctx.roundRect(-9, -8, 18, 6, 3);
+            ctx.fillStyle = '#9C640C';
+            ctx.fill();
+
+            // 4. رأس الدبوس الذهبي ثلاثي الأبعاد
+            const headGrad = ctx.createRadialGradient(-4, 6, 2, 0, 10, 18);
+            headGrad.addColorStop(0, '#FFF3B0');
+            headGrad.addColorStop(0.45, '#C9A227');
+            headGrad.addColorStop(1, '#7E5109');
+
+            ctx.beginPath();
+            ctx.arc(0, 10, 15, 0, Math.PI * 2);
+            ctx.fillStyle = headGrad;
+            ctx.shadowColor = 'rgba(31, 56, 100, 0.35)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 4;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#1F3864';
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawStarShape(cx, cy, spikes, outerR, innerR, rotation, color, alpha) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(rotation);
+            ctx.globalAlpha = Math.max(0, alpha);
+            ctx.beginPath();
+            let rot = (Math.PI / 2) * 3;
+            const step = Math.PI / spikes;
+            ctx.moveTo(0, -outerR);
+            for (let i = 0; i < spikes; i++) {
+                ctx.lineTo(Math.cos(rot) * outerR, Math.sin(rot) * outerR);
+                rot += step;
+                ctx.lineTo(Math.cos(rot) * innerR, Math.sin(rot) * innerR);
+                rot += step;
+            }
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function updateAndDrawParticles() {
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.14; // جاذبية خفيفة
+                p.rotation += p.vRot;
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    state.particles.splice(i, 1);
+                    continue;
+                }
+
+                if (p.type === 'star') {
+                    drawStarShape(p.x, p.y, 5, p.size, p.size * 0.45, p.rotation, p.color, p.alpha);
+                } else {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rotation);
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.65);
+                    ctx.restore();
+                }
+            }
+        }
+
+        function gameLoop() {
+            const rect = canvas.getBoundingClientRect();
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            // تحديث ورسم البالونات
+            if (state.isPlaying) {
+                const minX = 12;
+                const maxX = rect.width - 12;
+                const minY = 16;
+                const maxY = rect.height - 135; // إبقاء منطقة الدبوس السفلية واضحة
+
+                state.balloons.forEach(b => {
+                    if (b.popped) return;
+
+                    if (!state.isModalOpen) {
+                        b.swayPhase += b.swaySpeed;
+                        b.x += b.vx + Math.sin(b.swayPhase) * 0.35;
+                        b.y += b.vy + Math.cos(b.swayPhase * 0.8) * 0.25;
+
+                        // ارتداد سلس عند حواف الشاشة
+                        if (b.x - b.rx < minX) {
+                            b.x = minX + b.rx;
+                            b.vx = Math.abs(b.vx);
+                        } else if (b.x + b.rx > maxX) {
+                            b.x = maxX - b.rx;
+                            b.vx = -Math.abs(b.vx);
+                        }
+
+                        if (b.y - b.ry < minY) {
+                            b.y = minY + b.ry;
+                            b.vy = Math.abs(b.vy);
+                        } else if (b.y + b.ry > maxY) {
+                            b.y = maxY - b.ry;
+                            b.vy = -Math.abs(b.vy);
+                        }
+                    }
+
+                    drawBalloon3D(b);
+                });
+
+                // رسم الدبوس الذهبي وتلاشي أثره تدريجيًا
+                if (!state.pin.isDragging && state.pin.trail.length > 0) {
+                    state.pin.trail.shift();
+                }
+                drawGoldenPin();
+            }
+
+            // رسم النجوم والقصاصات المتطايرة
+            updateAndDrawParticles();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // تهيئة أولية عند تحميل الصفحة
+        window.onload = function () {
+            resizeCanvas();
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
